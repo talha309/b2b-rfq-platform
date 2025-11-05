@@ -1,1 +1,9 @@
+# Python cache & virtual env
+__pycache__/
+*.pyc
 .env
+venv/
+
+# Alembic config file
+alembic.ini
+
