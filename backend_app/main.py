@@ -1,25 +1,36 @@
-from fastapi import FastAPI
-<<<<<<< HEAD
-from backend_app.api.v1 import chat, rfq, customer, factory
-from backend_app.db.base import Base
-from backend_app.db.session import engine
-=======
-from app.api.v1 import chat, rfq
-from app.db.base import Base
-from app.db.session import engine
->>>>>>> 251535d81599a3c8027c686bd2947fd0a43f4133
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import asyncio
 
-app = FastAPI(title="B2B RFQ Platform", version="0.1.0")
+from database.data_base import  Base, get_db
+from routes.authentication_routes import auth_router
+from models import models
+from utils import validation, schemas
 
-@app.on_event("startup")
-async def startup():
-    Base.metadata.create_all(bind=engine)
+app = FastAPI(title="FastAPI Auth Example")
 
-app.include_router(chat.router, prefix="/v1/chat", tags=["chat"])
-<<<<<<< HEAD
-app.include_router(rfq.router, prefix="/v1/rfq", tags=["rfq"])
-app.include_router(customer.router, prefix="/v1/customer", tags=["customer"])
-app.include_router(factory.router, prefix="/v1/factory", tags=["factory"])
-=======
-app.include_router(rfq.router, prefix="/v1/rfq", tags=["rfq"])
->>>>>>> 251535d81599a3c8027c686bd2947fd0a43f4133
+# include router
+app.include_router(auth_router.router)
+
+# Simple dependency to get current user from bearer token
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: AsyncSession = Depends(get_db)):
+    token = credentials.credentials
+    try:
+        token_data = validation.decode_access_token(token)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
+
+    q = select(models.User).where(models.User.id == token_data.user_id)
+    result = await db.execute(q)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+@app.get("/me", response_model=schemas.UserOut)
+async def read_me(current_user: models.User = Depends(get_current_user)):
+    return current_user
